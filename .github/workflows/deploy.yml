@@ -12,11 +12,9 @@ jobs:
   # ==========================================
   validate_stg:
     name: 🔍 Validar en STG
-    # Se ejecuta cuando la PR está abierta (no mergeada)
     if: github.event.pull_request.merged == false
     runs-on: ubuntu-latest
-    # Aunque no es un despliegue, asignamos entorno si queremos usar el secreto
-    environment: stg
+    # Sin bloque environment: Se ejecuta 100% automático al abrir la PR
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -26,7 +24,7 @@ jobs:
 
       - name: Authenticate to Salesforce STG
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          echo "${{ secrets.STG_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a stg-org
 
       - name: Validar Componentes (Checkonly)
@@ -36,7 +34,7 @@ jobs:
     name: 🚀 Desplegar en STG
     if: github.event.pull_request.merged == false
     needs: validate_stg
-    environment: stg 
+    environment: stg # AQUÍ SÍ HAY ENTORNO: Pausa y pide el botón manual
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -47,7 +45,7 @@ jobs:
 
       - name: Authenticate to Salesforce STG
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          echo "${{ secrets.STG_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a stg-org
 
       - name: Desplegar Componentes
@@ -60,8 +58,8 @@ jobs:
     name: 🔍 Validar en QA
     if: github.event.pull_request.merged == false
     needs: deploy_stg
-    environment: qa
     runs-on: ubuntu-latest
+    # Sin bloque environment: Se ejecuta 100% automático tras desplegar en STG
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -71,7 +69,7 @@ jobs:
 
       - name: Authenticate to Salesforce QA
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          echo "${{ secrets.QA_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a qa-org
 
       - name: Validar Componentes (Checkonly)
@@ -81,7 +79,7 @@ jobs:
     name: 🚀 Desplegar en QA
     if: github.event.pull_request.merged == false
     needs: validate_qa
-    environment: qa 
+    environment: qa # AQUÍ SÍ HAY ENTORNO: Pausa y pide el botón manual
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -92,7 +90,7 @@ jobs:
 
       - name: Authenticate to Salesforce QA
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          echo "${{ secrets.QA_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a qa-org
 
       - name: Desplegar Componentes
@@ -103,9 +101,8 @@ jobs:
   # ==========================================
   deploy_pro:
     name: 🏆 Desplegar en Producción
-    # Se ejecuta SOLO cuando la PR se ha mergeado en master
     if: github.event.pull_request.merged == true
-    environment: pro
+    environment: pro # AQUÍ SÍ HAY ENTORNO: Pausa y pide el botón manual tras el merge
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -116,7 +113,7 @@ jobs:
 
       - name: Authenticate to Salesforce PRO
         run: |
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          echo "${{ secrets.PRO_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a pro-org
 
       - name: Desplegar Componentes
