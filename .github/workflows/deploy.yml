@@ -6,6 +6,9 @@ on:
       - master
     types: [opened, synchronize, reopened, closed]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 # Permisos para poder añadir las etiquetas visuales (Labels) a la PR
 permissions:
   pull-requests: write
