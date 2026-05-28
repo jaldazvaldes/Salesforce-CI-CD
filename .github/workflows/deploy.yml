@@ -6,6 +6,11 @@ on:
       - master
     types: [opened, synchronize, reopened, closed]
 
+# Permisos para poder añadir las etiquetas visuales (Labels) a la PR
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   # ==========================================
   # ENTORNO: STAGING (STG)
@@ -14,42 +19,39 @@ jobs:
     name: 🔍 Validar en STG
     if: github.event.pull_request.merged == false
     runs-on: ubuntu-latest
-    # Sin bloque environment: Se ejecuta 100% automático al abrir la PR
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli
-
       - name: Authenticate to Salesforce STG
         run: |
           echo "${{ secrets.STG_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a stg-org
-
-      - name: Validar Componentes (Checkonly)
+      - name: Validar Componentes
         run: sf project deploy start --dry-run --target-org stg-org
 
   deploy_stg:
     name: 🚀 Desplegar en STG
     if: github.event.pull_request.merged == false
     needs: validate_stg
-    environment: stg # AQUÍ SÍ HAY ENTORNO: Pausa y pide el botón manual
+    environment: stg # BOTÓN: Aprobar Despliegue STG
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli
-
       - name: Authenticate to Salesforce STG
         run: |
           echo "${{ secrets.STG_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a stg-org
-
       - name: Desplegar Componentes
         run: sf project deploy start --target-org stg-org
+      - name: Añadir Etiqueta Visual a la PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr edit ${{ github.event.pull_request.number }} --add-label "Deployed: STG"
 
   # ==========================================
   # ENTORNO: QUALITY ASSURANCE (QA)
@@ -58,63 +60,81 @@ jobs:
     name: 🔍 Validar en QA
     if: github.event.pull_request.merged == false
     needs: deploy_stg
+    environment: qa-validation # BOTÓN: Aprobar Validación QA
     runs-on: ubuntu-latest
-    # Sin bloque environment: Se ejecuta 100% automático tras desplegar en STG
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli
-
       - name: Authenticate to Salesforce QA
         run: |
           echo "${{ secrets.QA_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a qa-org
-
-      - name: Validar Componentes (Checkonly)
+      - name: Validar Componentes
         run: sf project deploy start --dry-run --target-org qa-org
 
   deploy_qa:
     name: 🚀 Desplegar en QA
     if: github.event.pull_request.merged == false
     needs: validate_qa
-    environment: qa # AQUÍ SÍ HAY ENTORNO: Pausa y pide el botón manual
+    environment: qa # BOTÓN: Aprobar Despliegue QA
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli
-
       - name: Authenticate to Salesforce QA
         run: |
           echo "${{ secrets.QA_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a qa-org
-
       - name: Desplegar Componentes
         run: sf project deploy start --target-org qa-org
+      - name: Actualizar Etiqueta Visual de la PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --remove-label "Deployed: STG" || true
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "Deployed: QA"
 
   # ==========================================
-  # ENTORNO: PRODUCCIÓN (PRO) - Al hacer Merge
+  # ENTORNO: PRODUCCIÓN (PRO) - VALIDACIÓN
   # ==========================================
-  deploy_pro:
-    name: 🏆 Desplegar en Producción
-    if: github.event.pull_request.merged == true
-    environment: pro # AQUÍ SÍ HAY ENTORNO: Pausa y pide el botón manual tras el merge
+  validate_pro:
+    name: 🔍 Validar en PRO
+    if: github.event.pull_request.merged == false
+    needs: deploy_qa
+    environment: pro-validation # BOTÓN: Aprobar Validación PRO
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli
-
       - name: Authenticate to Salesforce PRO
         run: |
           echo "${{ secrets.PRO_AUTH_URL }}" > auth.txt
           sf org login sfdx-url -f auth.txt -a pro-org
+      - name: Validar Componentes
+        run: sf project deploy start --dry-run --target-org pro-org
 
+  # ==========================================
+  # ENTORNO: PRODUCCIÓN (PRO) - DESPLIEGUE FINAL
+  # ==========================================
+  deploy_pro:
+    name: 🏆 Desplegar en Producción
+    if: github.event.pull_request.merged == true
+    environment: pro # Registra el despliegue final en el dashboard de GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli
+      - name: Authenticate to Salesforce PRO
+        run: |
+          echo "${{ secrets.PRO_AUTH_URL }}" > auth.txt
+          sf org login sfdx-url -f auth.txt -a pro-org
       - name: Desplegar Componentes
         run: sf project deploy start --target-org pro-org
